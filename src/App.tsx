@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { format } from 'date-fns';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import CalendarPage from './pages/CalendarPage';
 import DayPage from './pages/DayPage';
 import WeekPage from './pages/WeekPage';
@@ -12,8 +11,6 @@ import MonthPage from './pages/MonthPage';
 import YearPage from './pages/YearPage';
 
 export default function App() {
-  const currentMonth = format(new Date(), 'yyyy-MM');
-
   return (
     <Router>
       <div className="min-h-screen bg-stone-50 text-stone-900 font-sans">
@@ -24,7 +21,7 @@ export default function App() {
         </header>
         <main className="max-w-3xl mx-auto px-4 py-8">
           <Routes>
-            <Route path="/" element={<Navigate to={`/month/${currentMonth}`} replace />} />
+            <Route path="/" element={<Navigate to="/calendar" replace />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/day/:date" element={<DayPage />} />
             <Route path="/week/:weekStart" element={<WeekPage />} />

@@ -27,6 +27,8 @@ export default function CalendarPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const navigate = useNavigate();
   const entries = useJournalStore((state) => state.entries);
+  const summaries = useJournalStore((state) => state.summaries);
+  const weeklyReflections = useJournalStore((state) => state.weeklyReflections);
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
@@ -85,6 +87,7 @@ export default function CalendarPage() {
 
     while (day <= endDate) {
       const weekStartDate = format(day, 'yyyy-MM-dd');
+      const hasWeeklyReflection = Boolean(weeklyReflections[weekStartDate]?.trim());
       for (let i = 0; i < 7; i++) {
         formattedDate = format(day, dateFormat);
         const cloneDay = day;
@@ -92,8 +95,10 @@ export default function CalendarPage() {
         
         // Check if there are entries for this day
         const dayEntries = entries.filter((e) => e.date === dateString);
+        const daySummary = summaries[dateString];
         const hasEntries = dayEntries.length > 0;
         const entryCount = dayEntries.length;
+        const hasDailyReflection = Boolean(daySummary?.reflection?.trim());
 
         days.push(
           <div
@@ -105,7 +110,8 @@ export default function CalendarPage() {
                 ? "text-stone-300 bg-stone-50/50"
                 : "text-stone-700 hover:bg-stone-100",
               isSameDay(day, new Date()) && "font-bold text-stone-900",
-              hasEntries && isSameMonth(day, monthStart) && "bg-stone-100/50"
+              hasEntries && isSameMonth(day, monthStart) && "bg-stone-100/50",
+              hasDailyReflection && isSameMonth(day, monthStart) && "bg-sky-100 border-sky-200 hover:bg-sky-200"
             )}
           >
             <span className={cn(
@@ -132,7 +138,12 @@ export default function CalendarPage() {
           {days}
           <div 
             onClick={() => navigate(`/week/${weekStartDate}`)}
-            className="w-8 sm:w-12 flex items-center justify-center border-b border-l border-stone-100 cursor-pointer text-stone-300 hover:text-stone-600 hover:bg-stone-50 transition-colors"
+            className={cn(
+              "w-8 sm:w-12 flex items-center justify-center border-b border-l border-stone-100 cursor-pointer transition-colors",
+              hasWeeklyReflection
+                ? "bg-orange-100 text-orange-600 hover:bg-orange-200"
+                : "text-stone-300 hover:text-stone-600 hover:bg-stone-50"
+            )}
             title="週の振り返り"
           >
             <FileText className="w-4 h-4" />

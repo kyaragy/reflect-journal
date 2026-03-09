@@ -1,20 +1,25 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Reflect Journal
 
-# Run and deploy your AI Studio app
+ローカルで動作する振り返り用ジャーナルアプリです。
 
-This contains everything you need to run your app locally.
+## セットアップ
 
-View your app in AI Studio: https://ai.studio/apps/da826490-87a4-4766-bab9-a4a65563f00e
+前提: Node.js
 
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
+1. 依存関係をインストール
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. 開発サーバーを起動
    `npm run dev`
+
+## スクリプト
+
+- `npm run dev`: 開発サーバー起動（`http://localhost:3000`）
+- `npm run build`: 本番ビルド作成
+- `npm run preview`: ビルド結果をローカル確認
+- `npm run lint`: TypeScript 型チェック
+
+## GitHub Pages で公開
+
+1. リポジトリを GitHub に push
+2. GitHub の `Settings > Pages` で `Source: GitHub Actions` を選択
+3. `main` ブランチへ push すると `.github/workflows/deploy-pages.yml` が自動実行され、Pages にデプロイされます
