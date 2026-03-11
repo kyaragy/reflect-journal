@@ -35,3 +35,8 @@
 - デフォルトでは `localStorageRepository` を利用します
 - `VITE_REPOSITORY_DRIVER=api` を指定すると `apiRepository` に切り替えられます
 - API のベース URL は `VITE_API_BASE_URL` で設定できます
+
+## API Contract
+
+- 将来の backend API に向けた client contract は `src/contracts/journalApi.ts` に定義しています
+- 仕様メモは `docs/api-contract.md` を参照してください

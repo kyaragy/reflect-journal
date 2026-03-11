@@ -3,6 +3,10 @@ type ApiClientConfig = {
   defaultHeaders?: HeadersInit;
 };
 
+export type ApiClientResult<T> =
+  | { ok: true; data: T; status: number }
+  | { ok: false; error: ApiClientError };
+
 export class ApiClientError extends Error {
   status: number;
   payload?: unknown;
@@ -44,6 +48,26 @@ export class ApiClient {
     }
 
     return this.parseResponse(response) as Promise<T>;
+  }
+
+  async requestSafe<T>(path: string, init: RequestInit = {}): Promise<ApiClientResult<T>> {
+    try {
+      const data = await this.request<T>(path, init);
+      return {
+        ok: true,
+        data,
+        status: 200,
+      };
+    } catch (error) {
+      if (error instanceof ApiClientError) {
+        return {
+          ok: false,
+          error,
+        };
+      }
+
+      throw error;
+    }
   }
 
   get<T>(path: string) {
