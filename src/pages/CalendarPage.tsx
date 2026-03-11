@@ -17,6 +17,8 @@ import { ChevronLeft, ChevronRight, FileText, Calendar as CalendarIcon, PenSquar
 import { useJournalStore } from '../store/useJournalStore';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { AnimatePresence } from 'motion/react';
+import JournalForm from '../components/JournalForm';
 
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
@@ -24,6 +26,7 @@ function cn(...inputs: (string | undefined | null | false)[]) {
 
 export default function CalendarPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [isQuickEntryOpen, setIsQuickEntryOpen] = useState(false);
   const navigate = useNavigate();
   const journalDays = useJournalStore((state) => state.days);
   const weeklySummaries = useJournalStore((state) => state.weeklySummaries);
@@ -35,6 +38,7 @@ export default function CalendarPage() {
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
+  const closeQuickEntry = () => setIsQuickEntryOpen(false);
 
   const onDateClick = (day: Date) => {
     navigate(`/day/${format(day, 'yyyy-MM-dd')}`);
@@ -172,7 +176,7 @@ export default function CalendarPage() {
             </p>
           </div>
           <button
-            onClick={() => navigate(`/day/${todayKey}`)}
+            onClick={() => setIsQuickEntryOpen(true)}
             className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-stone-800 px-4 py-3 text-sm font-medium text-stone-50 transition-colors hover:bg-stone-700"
           >
             <PenSquare className="h-4 w-4" />
@@ -200,6 +204,15 @@ export default function CalendarPage() {
           {format(currentMonth, 'yyyy年', { locale: ja })}の振り返り
         </button>
       </div>
+
+      <AnimatePresence>
+        {isQuickEntryOpen && (
+          <JournalForm
+            date={todayKey}
+            onClose={closeQuickEntry}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
