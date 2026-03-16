@@ -1,19 +1,46 @@
 # Backend
 
-App Runner 配備を見据えた backend API の雛形です。
+Lambda 向けの TypeScript backend です。実装は `API Gateway HTTP API -> Lambda -> RDS Data API -> Aurora PostgreSQL` を前提にしています。
 
-## Run
+## Entry Points
 
-リポジトリルートで以下を実行します。
+- `backend/src/functions/api/handler.ts`
+  - 本番用の Lambda handler
+- `backend/src/server.ts`
+  - ローカル確認用の HTTP adapter
+
+## Routes
+
+- `GET /health`
+- `GET /bootstrap`
+- `GET /days/:date`
+- `PUT /days/:date`
+- `PUT /days/:date/summary`
+- `POST /days/:date/cards`
+- `PUT /days/:date/cards/:cardId`
+- `DELETE /days/:date/cards/:cardId`
+- `GET /weeks/:weekKey`
+- `PUT /weeks/:weekKey/summary`
+- `GET /months/:monthKey`
+- `PUT /months/:monthKey/summary`
+- `GET /years/:yearKey`
+- `PUT /years/:yearKey/summary`
+- `POST /migration/local-storage-import`
+
+## Environment Variables
+
+- `AWS_REGION`
+- `DATABASE_ARN`
+- `DATABASE_SECRET_ARN`
+- `DATABASE_NAME`
+- `CORS_ALLOW_ORIGIN`
+- `PORT`
+
+## Local Run
 
 ```bash
+npm install
 npm run backend:dev
 ```
 
-デフォルトでは `http://localhost:4000` で起動します。
-
-## Health Check
-
-```bash
-curl http://localhost:4000/health
-```
+ローカル server は `x-dev-user-id` ヘッダを指定しない場合、`local-dev-user` を JWT `sub` 相当として扱います。

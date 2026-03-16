@@ -52,10 +52,10 @@
 
 ## Backend Skeleton
 
-- `backend/` に App Runner 配備を見据えた API 雛形を追加しています
+- `backend/` に将来の AWS サーバーレス API 配備を見据えた backend 雛形を追加しています
 - ローカル起動は `npm run backend:dev`
 - エンドポイント一覧とヘルスチェックは `backend/README.md` を参照してください
 
 ## AWS Migration Plan
 
-- AWS 移行方針と DynamoDB 保存設計は `docs/aws-migration-plan.md` に整理しています
+- AWS 移行方針と RDB ベースのサーバーレス構成案は `docs/aws-migration-plan.md` に整理しています

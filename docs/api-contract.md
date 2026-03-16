@@ -1,9 +1,11 @@
 # Journal API Contract
 
-将来 App Runner 上で提供する backend API を見据えた、フロント側の契約メモです。
+将来 `API Gateway + Lambda` などの backend API で提供することを見据えた、フロント側の契約メモです。
 
 ## Path
 
+- `GET /health`
+- `GET /bootstrap`
 - `GET /days/:date`
 - `PUT /days/:date`
 - `PUT /days/:date/summary`
@@ -14,6 +16,9 @@
 - `PUT /weeks/:weekKey/summary`
 - `GET /months/:monthKey`
 - `PUT /months/:monthKey/summary`
+- `GET /years/:yearKey`
+- `PUT /years/:yearKey/summary`
+- `POST /migration/local-storage-import`
 
 ## Success Response
 
@@ -40,6 +45,13 @@
 - `date`: `YYYY-MM-DD`
 - `weekKey`: `YYYY-MM-DD`
 - `monthKey`: `YYYY-MM`
+- `yearKey`: `YYYY`
 - `cardId`: 空文字不可
 
 `weekKey` は週の開始日を表す `YYYY-MM-DD` を前提とします。
+
+## Auth
+
+- frontend から `userId` は送らない
+- API Gateway HTTP API の JWT authorizer が事前に JWT を検証する
+- Lambda は `requestContext.authorizer.jwt.claims.sub` を `user_id` として扱う
