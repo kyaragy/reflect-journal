@@ -2,6 +2,8 @@
 
 Reflect Journal を AWS に移行する際の、低コスト寄りなサーバーレス RDB 構成メモです。
 
+実際の AWS コンソール操作手順は [docs/aws-manual-setup.md](/home/kiaragi/projects/reflect-journal/docs/aws-manual-setup.md) を参照してください。
+
 2026-03-12 時点では、次の前提で考えるのが妥当です。
 
 - Frontend: Amplify Hosting
