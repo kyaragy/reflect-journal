@@ -12,6 +12,7 @@ interface JournalFormProps {
 export default function JournalForm({ date, onClose, entryToEdit }: JournalFormProps) {
   const addEntry = useJournalStore((state) => state.addEntry);
   const updateEntry = useJournalStore((state) => state.updateEntry);
+  const saving = useJournalStore((state) => state.saving);
   
   const [fact, setFact] = useState('');
   const [thought, setThought] = useState('');
@@ -33,23 +34,22 @@ export default function JournalForm({ date, onClose, entryToEdit }: JournalFormP
     }, 120);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fact && !thought && !emotion && !bodySensation) {
-      // Don't save empty entries
       onClose();
       return;
     }
     
     if (entryToEdit) {
-      updateEntry(date, entryToEdit.id, {
+      await updateEntry(date, entryToEdit.id, {
         fact,
         thought,
         emotion,
         bodySensation,
       });
     } else {
-      addEntry({
+      await addEntry({
         date,
         fact,
         thought,
@@ -146,9 +146,10 @@ export default function JournalForm({ date, onClose, entryToEdit }: JournalFormP
           <button
             type="submit"
             form="journal-form"
+            disabled={saving}
             className="w-full py-4 bg-stone-800 text-stone-50 rounded-xl font-medium hover:bg-stone-700 transition-colors shadow-sm"
           >
-            {entryToEdit ? '更新する' : '保存する'}
+            {saving ? '保存中...' : entryToEdit ? '更新する' : '保存する'}
           </button>
         </div>
       </motion.div>

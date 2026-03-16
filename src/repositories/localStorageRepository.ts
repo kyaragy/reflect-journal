@@ -1,15 +1,17 @@
-import { v4 as uuidv4 } from 'uuid';
 import { addDays, format, parseISO } from 'date-fns';
+import { v4 as uuidv4 } from 'uuid';
 import { createEmptyJournalSnapshot } from '../domain/journal';
-import { getAuthSession } from '../auth/authSession';
 import type {
-  CreateCardInput,
   Card,
+  CreateCardInput,
   Day,
   JournalSnapshot,
+  MonthRecord,
+  WeekRecord,
+  YearRecord,
+  YearlySummary,
   MonthlySummary,
   WeeklySummary,
-  YearlySummary,
 } from '../domain/journal';
 import type { JournalRepository } from './journalRepository';
 
@@ -156,7 +158,7 @@ const isLegacySnapshot = (value: unknown): value is LegacySnapshot => {
   );
 };
 
-const readSnapshot = (): JournalSnapshot => {
+const readSnapshot = async (): Promise<JournalSnapshot> => {
   if (typeof window === 'undefined') {
     return createEmptyJournalSnapshot();
   }
@@ -176,11 +178,7 @@ const readSnapshot = (): JournalSnapshot => {
       return migrateLegacySnapshot(parsed);
     }
 
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      'state' in parsed
-    ) {
+    if (parsed && typeof parsed === 'object' && 'state' in parsed) {
       const state = (parsed as { state: unknown }).state;
       if (isSnapshot(state)) {
         return state;
@@ -196,7 +194,7 @@ const readSnapshot = (): JournalSnapshot => {
   return createEmptyJournalSnapshot();
 };
 
-const writeSnapshot = (snapshot: JournalSnapshot) => {
+const writeSnapshot = async (snapshot: JournalSnapshot) => {
   if (typeof window === 'undefined') {
     return;
   }
@@ -210,76 +208,66 @@ const writeSnapshot = (snapshot: JournalSnapshot) => {
   );
 };
 
-const getDay = (snapshot: JournalSnapshot, date: string) =>
-  snapshot.days.find((day) => day.date === date) ?? null;
+const getDay = (snapshot: JournalSnapshot, date: string) => snapshot.days.find((day) => day.date === date) ?? null;
 
-const getCurrentUserId = () => getAuthSession().userId ?? undefined;
-
-const upsertWeeklySummary = (
-  summaries: WeeklySummary[],
-  weekKey: string,
-  summary: string
-) => {
+const upsertWeeklySummary = (summaries: WeeklySummary[], weekKey: string, summary: string) => {
   const now = new Date().toISOString();
   const existing = summaries.find((item) => item.weekKey === weekKey);
   if (!existing) {
-    return [...summaries, { userId: getCurrentUserId(), weekKey, summary, createdAt: now, updatedAt: now }];
+    return [...summaries, { weekKey, summary, createdAt: now, updatedAt: now }];
   }
-  return summaries.map((item) =>
-    item.weekKey === weekKey ? { ...item, userId: item.userId ?? getCurrentUserId(), summary, updatedAt: now } : item
-  );
+
+  return summaries.map((item) => (item.weekKey === weekKey ? { ...item, summary, updatedAt: now } : item));
 };
 
-const upsertMonthlySummary = (
-  summaries: MonthlySummary[],
-  monthKey: string,
-  summary: string
-) => {
+const upsertMonthlySummary = (summaries: MonthlySummary[], monthKey: string, summary: string) => {
   const now = new Date().toISOString();
   const existing = summaries.find((item) => item.monthKey === monthKey);
   if (!existing) {
-    return [...summaries, { userId: getCurrentUserId(), monthKey, summary, createdAt: now, updatedAt: now }];
+    return [...summaries, { monthKey, summary, createdAt: now, updatedAt: now }];
   }
-  return summaries.map((item) =>
-    item.monthKey === monthKey ? { ...item, userId: item.userId ?? getCurrentUserId(), summary, updatedAt: now } : item
-  );
+
+  return summaries.map((item) => (item.monthKey === monthKey ? { ...item, summary, updatedAt: now } : item));
 };
 
-const upsertYearlySummary = (
-  summaries: YearlySummary[],
-  yearKey: string,
-  summary: string
-) => {
+const upsertYearlySummary = (summaries: YearlySummary[], yearKey: string, summary: string) => {
   const now = new Date().toISOString();
   const existing = summaries.find((item) => item.yearKey === yearKey);
   if (!existing) {
-    return [...summaries, { userId: getCurrentUserId(), yearKey, summary, createdAt: now, updatedAt: now }];
+    return [...summaries, { yearKey, summary, createdAt: now, updatedAt: now }];
   }
-  return summaries.map((item) =>
-    item.yearKey === yearKey ? { ...item, userId: item.userId ?? getCurrentUserId(), summary, updatedAt: now } : item
-  );
+
+  return summaries.map((item) => (item.yearKey === yearKey ? { ...item, summary, updatedAt: now } : item));
 };
 
+const sortSnapshot = (snapshot: JournalSnapshot): JournalSnapshot => ({
+  days: [...snapshot.days].sort((left, right) => left.date.localeCompare(right.date)),
+  weeklySummaries: [...snapshot.weeklySummaries].sort((left, right) => left.weekKey.localeCompare(right.weekKey)),
+  monthlySummaries: [...snapshot.monthlySummaries].sort((left, right) => left.monthKey.localeCompare(right.monthKey)),
+  yearlySummaries: [...snapshot.yearlySummaries].sort((left, right) => left.yearKey.localeCompare(right.yearKey)),
+});
+
 export const localStorageRepository: JournalRepository = {
-  getState() {
+  async bootstrap() {
     return readSnapshot();
   },
 
-  getDay(date) {
-    return getDay(readSnapshot(), date);
+  async getDay(date) {
+    return getDay(await readSnapshot(), date);
   },
 
-  saveDay(day) {
-    const snapshot = readSnapshot();
-    const days = snapshot.days.filter((item) => item.date !== day.date);
-    writeSnapshot({
+  async saveDay(day) {
+    const snapshot = await readSnapshot();
+    const nextSnapshot = sortSnapshot({
       ...snapshot,
-      days: [...days, day].sort((left, right) => left.date.localeCompare(right.date)),
+      days: [...snapshot.days.filter((item) => item.date !== day.date), day],
     });
+    await writeSnapshot(nextSnapshot);
+    return day;
   },
 
-  getWeek(weekKey) {
-    const snapshot = readSnapshot();
+  async getWeek(weekKey) {
+    const snapshot = await readSnapshot();
     const days = Array.from({ length: 7 }, (_, index) => {
       const dayKey = format(addDays(parseISO(weekKey), index), 'yyyy-MM-dd');
       return getDay(snapshot, dayKey);
@@ -292,37 +280,50 @@ export const localStorageRepository: JournalRepository = {
     };
   },
 
-  saveWeekSummary(weekKey, summary) {
-    const snapshot = readSnapshot();
-    writeSnapshot({
+  async saveWeekSummary(weekKey, summary) {
+    const snapshot = await readSnapshot();
+    const nextSnapshot = sortSnapshot({
       ...snapshot,
       weeklySummaries: upsertWeeklySummary(snapshot.weeklySummaries, weekKey, summary),
     });
+    await writeSnapshot(nextSnapshot);
+    return {
+      weekKey,
+      summary: nextSnapshot.weeklySummaries.find((item) => item.weekKey === weekKey),
+      days: Array.from({ length: 7 }, (_, index) => {
+        const dayKey = format(addDays(parseISO(weekKey), index), 'yyyy-MM-dd');
+        return getDay(nextSnapshot, dayKey);
+      }).filter((day): day is Day => Boolean(day)),
+    } satisfies WeekRecord;
   },
 
-  getMonth(monthKey) {
-    const snapshot = readSnapshot();
-    const days = snapshot.days.filter((day) => day.date.startsWith(monthKey));
-
+  async getMonth(monthKey) {
+    const snapshot = await readSnapshot();
     return {
       monthKey,
       summary: snapshot.monthlySummaries.find((item) => item.monthKey === monthKey),
       weeklySummaries: snapshot.weeklySummaries.filter((item) => item.weekKey.startsWith(monthKey)),
-      days,
+      days: snapshot.days.filter((day) => day.date.startsWith(monthKey)),
     };
   },
 
-  saveMonthSummary(monthKey, summary) {
-    const snapshot = readSnapshot();
-    writeSnapshot({
+  async saveMonthSummary(monthKey, summary) {
+    const snapshot = await readSnapshot();
+    const nextSnapshot = sortSnapshot({
       ...snapshot,
       monthlySummaries: upsertMonthlySummary(snapshot.monthlySummaries, monthKey, summary),
     });
+    await writeSnapshot(nextSnapshot);
+    return {
+      monthKey,
+      summary: nextSnapshot.monthlySummaries.find((item) => item.monthKey === monthKey),
+      weeklySummaries: nextSnapshot.weeklySummaries.filter((item) => item.weekKey.startsWith(monthKey)),
+      days: nextSnapshot.days.filter((day) => day.date.startsWith(monthKey)),
+    } satisfies MonthRecord;
   },
 
-  getYear(yearKey) {
-    const snapshot = readSnapshot();
-
+  async getYear(yearKey) {
+    const snapshot = await readSnapshot();
     return {
       yearKey,
       summary: snapshot.yearlySummaries.find((item) => item.yearKey === yearKey),
@@ -330,16 +331,22 @@ export const localStorageRepository: JournalRepository = {
     };
   },
 
-  saveYearSummary(yearKey, summary) {
-    const snapshot = readSnapshot();
-    writeSnapshot({
+  async saveYearSummary(yearKey, summary) {
+    const snapshot = await readSnapshot();
+    const nextSnapshot = sortSnapshot({
       ...snapshot,
       yearlySummaries: upsertYearlySummary(snapshot.yearlySummaries, yearKey, summary),
     });
+    await writeSnapshot(nextSnapshot);
+    return {
+      yearKey,
+      summary: nextSnapshot.yearlySummaries.find((item) => item.yearKey === yearKey),
+      monthlySummaries: nextSnapshot.monthlySummaries.filter((item) => item.monthKey.startsWith(yearKey)),
+    } satisfies YearRecord;
   },
 
-  createCard(date, card: CreateCardInput) {
-    const snapshot = readSnapshot();
+  async createCard(date, card: CreateCardInput) {
+    const snapshot = await readSnapshot();
     const now = new Date().toISOString();
     const nextCard: Card = {
       ...card,
@@ -350,28 +357,30 @@ export const localStorageRepository: JournalRepository = {
     const currentDay = getDay(snapshot, date);
 
     if (!currentDay) {
-      const nextDay: Day = {
-        date,
-        userId: getCurrentUserId(),
-        cards: [nextCard],
-        dailySummary: '',
-        createdAt: now,
-        updatedAt: now,
-      };
-      writeSnapshot({
-        ...snapshot,
-        days: [...snapshot.days, nextDay].sort((left, right) => left.date.localeCompare(right.date)),
-      });
+      await writeSnapshot(
+        sortSnapshot({
+          ...snapshot,
+          days: [
+            ...snapshot.days,
+            {
+              date,
+              cards: [nextCard],
+              dailySummary: '',
+              createdAt: now,
+              updatedAt: now,
+            },
+          ],
+        })
+      );
       return nextCard;
     }
 
-    writeSnapshot({
+    await writeSnapshot({
       ...snapshot,
       days: snapshot.days.map((day) =>
         day.date === date
           ? {
               ...day,
-              userId: day.userId ?? getCurrentUserId(),
               cards: [...day.cards, nextCard],
               updatedAt: now,
             }
@@ -382,12 +391,12 @@ export const localStorageRepository: JournalRepository = {
     return nextCard;
   },
 
-  updateCard(date, cardId, card) {
-    const snapshot = readSnapshot();
+  async updateCard(date, cardId, card) {
+    const snapshot = await readSnapshot();
     let updatedCard: Card | null = null;
     const now = new Date().toISOString();
 
-    writeSnapshot({
+    await writeSnapshot({
       ...snapshot,
       days: snapshot.days.map((day) => {
         if (day.date !== date) {
@@ -419,10 +428,10 @@ export const localStorageRepository: JournalRepository = {
     return updatedCard;
   },
 
-  deleteCard(date, cardId) {
-    const snapshot = readSnapshot();
+  async deleteCard(date, cardId) {
+    const snapshot = await readSnapshot();
     const now = new Date().toISOString();
-    writeSnapshot({
+    await writeSnapshot({
       ...snapshot,
       days: snapshot.days.map((day) =>
         day.date === date
@@ -436,41 +445,36 @@ export const localStorageRepository: JournalRepository = {
     });
   },
 
-  saveDailySummary(date, summary) {
-    const snapshot = readSnapshot();
+  async saveDailySummary(date, summary) {
+    const snapshot = await readSnapshot();
     const now = new Date().toISOString();
     const currentDay = getDay(snapshot, date);
 
-    if (!currentDay) {
-      writeSnapshot({
-        ...snapshot,
-        days: [
-          ...snapshot.days,
-          {
-            date,
-            userId: getCurrentUserId(),
-            cards: [],
-            dailySummary: summary,
-            createdAt: now,
-            updatedAt: now,
-          },
-        ].sort((left, right) => left.date.localeCompare(right.date)),
-      });
-      return;
-    }
+    const nextDay = currentDay
+      ? {
+          ...currentDay,
+          dailySummary: summary,
+          updatedAt: now,
+        }
+      : {
+          date,
+          cards: [],
+          dailySummary: summary,
+          createdAt: now,
+          updatedAt: now,
+        };
 
-    writeSnapshot({
+    const nextSnapshot = sortSnapshot({
       ...snapshot,
-      days: snapshot.days.map((day) =>
-        day.date === date
-          ? {
-              ...day,
-              userId: day.userId ?? getCurrentUserId(),
-              dailySummary: summary,
-              updatedAt: now,
-            }
-          : day
-      ),
+      days: [...snapshot.days.filter((day) => day.date !== date), nextDay],
     });
+    await writeSnapshot(nextSnapshot);
+    return nextDay;
+  },
+
+  async importSnapshot(snapshot) {
+    const nextSnapshot = sortSnapshot(snapshot);
+    await writeSnapshot(nextSnapshot);
+    return nextSnapshot;
   },
 };

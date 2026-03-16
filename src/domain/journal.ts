@@ -10,7 +10,6 @@ export type Card = {
 
 export type Day = {
   date: string;
-  userId?: string;
   cards: Card[];
   dailySummary: string;
   createdAt: string;
@@ -18,7 +17,6 @@ export type Day = {
 };
 
 export type WeeklySummary = {
-  userId?: string;
   weekKey: string;
   summary: string;
   createdAt: string;
@@ -26,7 +24,6 @@ export type WeeklySummary = {
 };
 
 export type MonthlySummary = {
-  userId?: string;
   monthKey: string;
   summary: string;
   createdAt: string;
@@ -34,7 +31,6 @@ export type MonthlySummary = {
 };
 
 export type YearlySummary = {
-  userId?: string;
   yearKey: string;
   summary: string;
   createdAt: string;

@@ -17,6 +17,7 @@ export default function YearPage() {
   const monthlySummaries = useJournalStore((state) => state.monthlySummaries);
   const yearlySummaries = useJournalStore((state) => state.yearlySummaries);
   const setYearlyReflection = useJournalStore((state) => state.setYearlyReflection);
+  const saving = useJournalStore((state) => state.saving);
 
   const yearKey = year || '';
   const currentReflection = yearlySummaries.find((summary) => summary.yearKey === yearKey)?.summary || '';
@@ -41,8 +42,8 @@ export default function YearPage() {
       .flatMap((day) => day.cards);
   }, [allDays, year]);
 
-  const handleSaveReflection = () => {
-    setYearlyReflection(yearKey, reflectionText);
+  const handleSaveReflection = async () => {
+    await setYearlyReflection(yearKey, reflectionText);
   };
 
   const generateMarkdown = () => {
@@ -121,10 +122,11 @@ export default function YearPage() {
               <div className="flex justify-end mt-3">
                 <button
                   onClick={handleSaveReflection}
+                  disabled={saving}
                   className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-stone-800 text-stone-50 hover:bg-stone-700 rounded-lg transition-colors"
                 >
                   <Save className="w-4 h-4" />
-                  保存
+                  {saving ? '保存中...' : '保存'}
                 </button>
               </div>
             </div>

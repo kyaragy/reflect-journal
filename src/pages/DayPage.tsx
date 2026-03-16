@@ -18,6 +18,7 @@ export default function DayPage() {
   const [copied, setCopied] = useState(false);
   
   const days = useJournalStore((state) => state.days);
+  const saving = useJournalStore((state) => state.saving);
   const day = useMemo(
     () => days.find((currentDay) => currentDay.date === date) ?? null,
     [days, date]
@@ -44,8 +45,8 @@ export default function DayPage() {
     setTimeout(() => setEntryToEdit(null), 300); // Wait for animation to finish
   };
 
-  const handleSaveReflection = () => {
-    setSummary(date, reflectionText);
+  const handleSaveReflection = async () => {
+    await setSummary(date, reflectionText);
   };
 
   const generateMarkdown = () => {
@@ -119,10 +120,11 @@ export default function DayPage() {
               <div className="flex justify-end mt-3">
                 <button
                   onClick={handleSaveReflection}
+                  disabled={saving}
                   className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-stone-800 text-stone-50 hover:bg-stone-700 rounded-lg transition-colors"
                 >
                   <Save className="w-4 h-4" />
-                  保存
+                  {saving ? '保存中...' : '保存'}
                 </button>
               </div>
             </div>

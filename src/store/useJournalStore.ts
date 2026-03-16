@@ -12,19 +12,37 @@ import { journalRepository } from '../repositories';
 
 export type { Card, Day, MonthlySummary, WeeklySummary, YearlySummary } from '../domain/journal';
 
+type AsyncStatus = 'idle' | 'loading' | 'ready' | 'error';
+
 interface JournalState {
   days: Day[];
   weeklySummaries: WeeklySummary[];
   monthlySummaries: MonthlySummary[];
   yearlySummaries: YearlySummary[];
-  addEntry: (entry: CreateCardInput & { date: string }) => void;
-  updateEntry: (date: string, id: string, entry: Partial<Card>) => void;
-  deleteEntry: (date: string, id: string) => void;
-  setSummary: (date: string, summary: string) => void;
-  setWeeklyReflection: (weekKey: string, reflection: string) => void;
-  setMonthlyReflection: (monthKey: string, reflection: string) => void;
-  setYearlyReflection: (yearKey: string, reflection: string) => void;
+  loading: boolean;
+  saving: boolean;
+  bootstrapStatus: AsyncStatus;
+  error: string | null;
+  bootstrap: () => Promise<void>;
+  refreshDay: (date: string) => Promise<void>;
+  refreshWeek: (weekKey: string) => Promise<void>;
+  refreshMonth: (monthKey: string) => Promise<void>;
+  refreshYear: (yearKey: string) => Promise<void>;
+  addEntry: (entry: CreateCardInput & { date: string }) => Promise<void>;
+  updateEntry: (date: string, id: string, entry: Partial<Card>) => Promise<void>;
+  deleteEntry: (date: string, id: string) => Promise<void>;
+  setSummary: (date: string, summary: string) => Promise<void>;
+  setWeeklyReflection: (weekKey: string, reflection: string) => Promise<void>;
+  setMonthlyReflection: (monthKey: string, reflection: string) => Promise<void>;
+  setYearlyReflection: (yearKey: string, reflection: string) => Promise<void>;
 }
+
+const emptyState = {
+  days: [],
+  weeklySummaries: [],
+  monthlySummaries: [],
+  yearlySummaries: [],
+};
 
 const snapshotToState = (snapshot: JournalSnapshot) => ({
   days: snapshot.days,
@@ -33,44 +51,249 @@ const snapshotToState = (snapshot: JournalSnapshot) => ({
   yearlySummaries: snapshot.yearlySummaries,
 });
 
+const replaceDay = (days: Day[], day: Day) =>
+  [...days.filter((item) => item.date !== day.date), day].sort((left, right) => left.date.localeCompare(right.date));
+
+const mergeWeek = (state: JournalState, week: { weekKey: string; days: Day[]; summary?: WeeklySummary }) => ({
+  days: [...state.days.filter((day) => !week.days.some((weekDay) => weekDay.date === day.date)), ...week.days].sort((left, right) =>
+    left.date.localeCompare(right.date)
+  ),
+  weeklySummaries: week.summary
+    ? [...state.weeklySummaries.filter((item) => item.weekKey !== week.weekKey), week.summary].sort((left, right) =>
+        left.weekKey.localeCompare(right.weekKey)
+      )
+    : state.weeklySummaries.filter((item) => item.weekKey !== week.weekKey),
+});
+
+const mergeMonth = (state: JournalState, month: { monthKey: string; days: Day[]; summary?: MonthlySummary; weeklySummaries: WeeklySummary[] }) => ({
+  days: [...state.days.filter((day) => !day.date.startsWith(month.monthKey)), ...month.days].sort((left, right) => left.date.localeCompare(right.date)),
+  weeklySummaries: [
+    ...state.weeklySummaries.filter((item) => !item.weekKey.startsWith(month.monthKey)),
+    ...month.weeklySummaries,
+  ].sort((left, right) => left.weekKey.localeCompare(right.weekKey)),
+  monthlySummaries: month.summary
+    ? [...state.monthlySummaries.filter((item) => item.monthKey !== month.monthKey), month.summary].sort((left, right) =>
+        left.monthKey.localeCompare(right.monthKey)
+      )
+    : state.monthlySummaries.filter((item) => item.monthKey !== month.monthKey),
+});
+
+const mergeYear = (state: JournalState, year: { yearKey: string; summary?: YearlySummary; monthlySummaries: MonthlySummary[] }) => ({
+  monthlySummaries: [
+    ...state.monthlySummaries.filter((item) => !item.monthKey.startsWith(year.yearKey)),
+    ...year.monthlySummaries,
+  ].sort((left, right) => left.monthKey.localeCompare(right.monthKey)),
+  yearlySummaries: year.summary
+    ? [...state.yearlySummaries.filter((item) => item.yearKey !== year.yearKey), year.summary].sort((left, right) =>
+        left.yearKey.localeCompare(right.yearKey)
+      )
+    : state.yearlySummaries.filter((item) => item.yearKey !== year.yearKey),
+});
+
+const toErrorMessage = (error: unknown) => (error instanceof Error ? error.message : 'Unexpected error');
+
+const withSaving = async (set: (fn: (state: JournalState) => Partial<JournalState>) => void, work: () => Promise<void>) => {
+  set(() => ({ saving: true, error: null }));
+
+  try {
+    await work();
+    set(() => ({ saving: false }));
+  } catch (error) {
+    set(() => ({
+      saving: false,
+      error: toErrorMessage(error),
+      bootstrapStatus: 'error',
+    }));
+    throw error;
+  }
+};
+
 export const useJournalStore = create<JournalState>()((set, get) => ({
-  ...snapshotToState(journalRepository.getState()),
-  addEntry: (entry) => {
-    journalRepository.createCard(entry.date, entry);
-    set(snapshotToState(journalRepository.getState()));
+  ...emptyState,
+  loading: false,
+  saving: false,
+  bootstrapStatus: 'idle',
+  error: null,
+
+  async bootstrap() {
+    if (get().bootstrapStatus === 'loading') {
+      return;
+    }
+
+    set(() => ({
+      loading: true,
+      error: null,
+      bootstrapStatus: 'loading',
+    }));
+
+    try {
+      const snapshot = await journalRepository.bootstrap();
+      set(() => ({
+        ...snapshotToState(snapshot),
+        loading: false,
+        bootstrapStatus: 'ready',
+        error: null,
+      }));
+    } catch (error) {
+      set(() => ({
+        loading: false,
+        bootstrapStatus: 'error',
+        error: toErrorMessage(error),
+      }));
+    }
   },
-  updateEntry: (date, id, updatedEntry) => {
+
+  async refreshDay(date) {
+    await withSaving(set, async () => {
+      const day = await journalRepository.getDay(date);
+      if (!day) {
+        set((state) => ({
+          days: state.days.filter((item) => item.date !== date),
+        }));
+        return;
+      }
+
+      set((state) => ({
+        days: replaceDay(state.days, day),
+      }));
+    });
+  },
+
+  async refreshWeek(weekKey) {
+    await withSaving(set, async () => {
+      const week = await journalRepository.getWeek(weekKey);
+      set((state) => ({
+        ...mergeWeek(state, week),
+      }));
+    });
+  },
+
+  async refreshMonth(monthKey) {
+    await withSaving(set, async () => {
+      const month = await journalRepository.getMonth(monthKey);
+      set((state) => ({
+        ...mergeMonth(state, month),
+      }));
+    });
+  },
+
+  async refreshYear(yearKey) {
+    await withSaving(set, async () => {
+      const year = await journalRepository.getYear(yearKey);
+      set((state) => ({
+        ...mergeYear(state, year),
+      }));
+    });
+  },
+
+  async addEntry(entry) {
+    await withSaving(set, async () => {
+      const createdCard = await journalRepository.createCard(entry.date, entry);
+      set((state) => {
+        const currentDay = state.days.find((day) => day.date === entry.date);
+        const nextDay = currentDay
+          ? {
+              ...currentDay,
+              cards: [...currentDay.cards, createdCard],
+              updatedAt: createdCard.updatedAt,
+            }
+          : {
+              date: entry.date,
+              cards: [createdCard],
+              dailySummary: '',
+              createdAt: createdCard.createdAt,
+              updatedAt: createdCard.updatedAt,
+            };
+
+        return {
+          days: replaceDay(state.days, nextDay),
+        };
+      });
+    });
+  },
+
+  async updateEntry(date, id, updatedEntry) {
     const currentDay = get().days.find((day) => day.date === date);
     if (!currentDay?.cards.find((card) => card.id === id)) {
       return;
     }
 
-    journalRepository.updateCard(date, id, updatedEntry);
-    set(snapshotToState(journalRepository.getState()));
+    await withSaving(set, async () => {
+      const updatedCard = await journalRepository.updateCard(date, id, updatedEntry);
+      if (!updatedCard) {
+        return;
+      }
+
+      set((state) => ({
+        days: state.days.map((day) =>
+          day.date === date
+            ? {
+                ...day,
+                updatedAt: updatedCard.updatedAt,
+                cards: day.cards.map((card) => (card.id === id ? updatedCard : card)),
+              }
+            : day
+        ),
+      }));
+    });
   },
-  deleteEntry: (date, id) => {
+
+  async deleteEntry(date, id) {
     const currentDay = get().days.find((day) => day.date === date);
     if (!currentDay?.cards.find((card) => card.id === id)) {
       return;
     }
 
-    journalRepository.deleteCard(date, id);
-    set(snapshotToState(journalRepository.getState()));
+    await withSaving(set, async () => {
+      await journalRepository.deleteCard(date, id);
+      const now = new Date().toISOString();
+      set((state) => ({
+        days: state.days.map((day) =>
+          day.date === date
+            ? {
+                ...day,
+                updatedAt: now,
+                cards: day.cards.filter((card) => card.id !== id),
+              }
+            : day
+        ),
+      }));
+    });
   },
-  setSummary: (date, summary) => {
-    journalRepository.saveDailySummary(date, summary);
-    set(snapshotToState(journalRepository.getState()));
+
+  async setSummary(date, summary) {
+    await withSaving(set, async () => {
+      const day = await journalRepository.saveDailySummary(date, summary);
+      set((state) => ({
+        days: replaceDay(state.days, day),
+      }));
+    });
   },
-  setWeeklyReflection: (weekKey, reflection) => {
-    journalRepository.saveWeekSummary(weekKey, reflection);
-    set(snapshotToState(journalRepository.getState()));
+
+  async setWeeklyReflection(weekKey, reflection) {
+    await withSaving(set, async () => {
+      const week = await journalRepository.saveWeekSummary(weekKey, reflection);
+      set((state) => ({
+        ...mergeWeek(state, week),
+      }));
+    });
   },
-  setMonthlyReflection: (monthKey, reflection) => {
-    journalRepository.saveMonthSummary(monthKey, reflection);
-    set(snapshotToState(journalRepository.getState()));
+
+  async setMonthlyReflection(monthKey, reflection) {
+    await withSaving(set, async () => {
+      const month = await journalRepository.saveMonthSummary(monthKey, reflection);
+      set((state) => ({
+        ...mergeMonth(state, month),
+      }));
+    });
   },
-  setYearlyReflection: (yearKey, reflection) => {
-    journalRepository.saveYearSummary(yearKey, reflection);
-    set(snapshotToState(journalRepository.getState()));
+
+  async setYearlyReflection(yearKey, reflection) {
+    await withSaving(set, async () => {
+      const year = await journalRepository.saveYearSummary(yearKey, reflection);
+      set((state) => ({
+        ...mergeYear(state, year),
+      }));
+    });
   },
 }));

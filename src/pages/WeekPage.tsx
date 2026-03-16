@@ -17,6 +17,7 @@ export default function WeekPage() {
   const allDays = useJournalStore((state) => state.days);
   const weeklySummaries = useJournalStore((state) => state.weeklySummaries);
   const setWeeklyReflection = useJournalStore((state) => state.setWeeklyReflection);
+  const saving = useJournalStore((state) => state.saving);
 
   const weekKey = weekStart || '';
   const currentReflection = weeklySummaries.find((summary) => summary.weekKey === weekKey)?.summary || '';
@@ -45,8 +46,8 @@ export default function WeekPage() {
     return weekDays.flatMap((day) => day.cards);
   }, [weekDays]);
 
-  const handleSaveReflection = () => {
-    setWeeklyReflection(weekKey, reflectionText);
+  const handleSaveReflection = async () => {
+    await setWeeklyReflection(weekKey, reflectionText);
   };
 
   const generateMarkdown = () => {
@@ -131,10 +132,11 @@ export default function WeekPage() {
               <div className="flex justify-end mt-3">
                 <button
                   onClick={handleSaveReflection}
+                  disabled={saving}
                   className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-stone-800 text-stone-50 hover:bg-stone-700 rounded-lg transition-colors"
                 >
                   <Save className="w-4 h-4" />
-                  保存
+                  {saving ? '保存中...' : '保存'}
                 </button>
               </div>
             </div>

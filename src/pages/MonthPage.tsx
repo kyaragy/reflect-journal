@@ -18,6 +18,7 @@ export default function MonthPage() {
   const weeklySummaries = useJournalStore((state) => state.weeklySummaries);
   const monthlySummaries = useJournalStore((state) => state.monthlySummaries);
   const setMonthlyReflection = useJournalStore((state) => state.setMonthlyReflection);
+  const saving = useJournalStore((state) => state.saving);
 
   const monthKey = yearMonth || '';
   const currentReflection = monthlySummaries.find((summary) => summary.monthKey === monthKey)?.summary || '';
@@ -47,8 +48,8 @@ export default function MonthPage() {
     return monthDays.flatMap((day) => day.cards);
   }, [monthDays]);
 
-  const handleSaveReflection = () => {
-    setMonthlyReflection(monthKey, reflectionText);
+  const handleSaveReflection = async () => {
+    await setMonthlyReflection(monthKey, reflectionText);
   };
 
   const generateMarkdown = () => {
@@ -140,10 +141,11 @@ export default function MonthPage() {
               <div className="flex justify-end mt-3">
                 <button
                   onClick={handleSaveReflection}
+                  disabled={saving}
                   className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-stone-800 text-stone-50 hover:bg-stone-700 rounded-lg transition-colors"
                 >
                   <Save className="w-4 h-4" />
-                  保存
+                  {saving ? '保存中...' : '保存'}
                 </button>
               </div>
             </div>

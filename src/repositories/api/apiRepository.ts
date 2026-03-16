@@ -1,15 +1,18 @@
-import { createEmptyJournalSnapshot } from '../../domain/journal';
-import { apiClient } from '../../lib/apiClient';
 import {
   assertCardId,
   assertDateString,
   assertMonthKey,
   assertWeekKey,
+  assertYearKey,
   journalApiPaths,
+  type BootstrapResponse,
   type DeleteCardResponse,
   type GetDayResponse,
   type GetMonthResponse,
   type GetWeekResponse,
+  type GetYearResponse,
+  type ImportLocalStorageSnapshotRequest,
+  type ImportLocalStorageSnapshotResponse,
   type PostCardRequest,
   type PostCardResponse,
   type PutCardRequest,
@@ -22,110 +25,107 @@ import {
   type PutMonthSummaryResponse,
   type PutWeekSummaryRequest,
   type PutWeekSummaryResponse,
+  type PutYearSummaryRequest,
+  type PutYearSummaryResponse,
 } from '../../contracts/journalApi';
+import { apiClient } from '../../lib/apiClient';
+import type { JournalSnapshot } from '../../domain/journal';
 import type { JournalRepository } from '../journalRepository';
 
-const createNotImplementedError = (methodName: string) =>
-  new Error(`${methodName} is not implemented for apiRepository yet.`);
-
 export const apiRepository: JournalRepository = {
-  getState() {
-    void apiClient;
-    return createEmptyJournalSnapshot();
+  async bootstrap() {
+    const response = await apiClient.get<BootstrapResponse>(journalApiPaths.bootstrap());
+    return response.data;
   },
 
-  getDay(date) {
+  async getDay(date) {
     assertDateString(date);
-    void apiClient.get<GetDayResponse>;
-    void journalApiPaths.day(date);
-    return null;
+    const response = await apiClient.get<GetDayResponse>(journalApiPaths.day(date));
+    return response.data;
   },
 
-  saveDay(day) {
+  async saveDay(day) {
     assertDateString(day.date);
-    void apiClient.put<PutDayResponse>;
-    void ({ ...day } satisfies PutDayRequest);
-    throw createNotImplementedError('saveDay');
+    const payload: PutDayRequest = { ...day };
+    const response = await apiClient.put<PutDayResponse>(journalApiPaths.day(day.date), payload);
+    return response.data;
   },
 
-  getWeek(weekKey) {
+  async getWeek(weekKey) {
     assertWeekKey(weekKey);
-    void apiClient.get<GetWeekResponse>;
-    void journalApiPaths.week(weekKey);
-    return {
-      weekKey,
-      days: [],
-    };
+    const response = await apiClient.get<GetWeekResponse>(journalApiPaths.week(weekKey));
+    return response.data;
   },
 
-  saveWeekSummary(weekKey, summary) {
+  async saveWeekSummary(weekKey, summary) {
     assertWeekKey(weekKey);
-    void apiClient.put<PutWeekSummaryResponse>;
-    void ({ summary } satisfies PutWeekSummaryRequest);
-    void journalApiPaths.weekSummary(weekKey);
-    throw createNotImplementedError('saveWeekSummary');
+    const payload: PutWeekSummaryRequest = { summary };
+    const response = await apiClient.put<PutWeekSummaryResponse>(journalApiPaths.weekSummary(weekKey), payload);
+    return response.data;
   },
 
-  getMonth(monthKey) {
+  async getMonth(monthKey) {
     assertMonthKey(monthKey);
-    void apiClient.get<GetMonthResponse>;
-    void journalApiPaths.month(monthKey);
-    return {
-      monthKey,
-      days: [],
-      weeklySummaries: [],
-    };
+    const response = await apiClient.get<GetMonthResponse>(journalApiPaths.month(monthKey));
+    return response.data;
   },
 
-  saveMonthSummary(monthKey, summary) {
+  async saveMonthSummary(monthKey, summary) {
     assertMonthKey(monthKey);
-    void apiClient.put<PutMonthSummaryResponse>;
-    void ({ summary } satisfies PutMonthSummaryRequest);
-    void journalApiPaths.monthSummary(monthKey);
-    throw createNotImplementedError('saveMonthSummary');
+    const payload: PutMonthSummaryRequest = { summary };
+    const response = await apiClient.put<PutMonthSummaryResponse>(journalApiPaths.monthSummary(monthKey), payload);
+    return response.data;
   },
 
-  getYear(yearKey) {
-    return {
-      yearKey,
-      monthlySummaries: [],
-    };
+  async getYear(yearKey) {
+    assertYearKey(yearKey);
+    const response = await apiClient.get<GetYearResponse>(journalApiPaths.year(yearKey));
+    return response.data;
   },
 
-  saveYearSummary() {
-    throw createNotImplementedError('saveYearSummary');
+  async saveYearSummary(yearKey, summary) {
+    assertYearKey(yearKey);
+    const payload: PutYearSummaryRequest = { summary };
+    const response = await apiClient.put<PutYearSummaryResponse>(journalApiPaths.yearSummary(yearKey), payload);
+    return response.data;
   },
 
-  createCard(date, card) {
+  async createCard(date, card) {
     assertDateString(date);
-    void apiClient.post<PostCardResponse>;
-    void ({ ...card } satisfies PostCardRequest);
-    void journalApiPaths.dayCards(date);
-    throw createNotImplementedError('createCard');
+    const payload: PostCardRequest = { ...card };
+    const response = await apiClient.post<PostCardResponse>(journalApiPaths.dayCards(date), payload);
+    return response.data;
   },
 
-  updateCard(date, cardId, card) {
+  async updateCard(date, cardId, card) {
     assertDateString(date);
     assertCardId(cardId);
-    void apiClient.put<PutCardResponse>;
-    void ({ ...card } satisfies PutCardRequest);
-    void journalApiPaths.dayCard(date, cardId);
-    throw createNotImplementedError('updateCard');
+    const payload: PutCardRequest = {
+      fact: card.fact,
+      thought: card.thought,
+      emotion: card.emotion,
+      bodySensation: card.bodySensation,
+    };
+    const response = await apiClient.put<PutCardResponse>(journalApiPaths.dayCard(date, cardId), payload);
+    return response.data;
   },
 
-  deleteCard(date, cardId) {
+  async deleteCard(date, cardId) {
     assertDateString(date);
     assertCardId(cardId);
-    void apiClient.delete<DeleteCardResponse>;
-    void journalApiPaths.dayCard(date, cardId);
-    throw createNotImplementedError('deleteCard');
+    await apiClient.delete<DeleteCardResponse>(journalApiPaths.dayCard(date, cardId));
   },
 
-  saveDailySummary(date, summary) {
+  async saveDailySummary(date, summary) {
     assertDateString(date);
-    void apiClient.put<PutDaySummaryResponse>;
-    void ({ dailySummary: summary } satisfies PutDaySummaryRequest);
-    void journalApiPaths.daySummary(date);
-    throw createNotImplementedError('saveDailySummary');
+    const payload: PutDaySummaryRequest = { dailySummary: summary };
+    const response = await apiClient.put<PutDaySummaryResponse>(journalApiPaths.daySummary(date), payload);
+    return response.data;
+  },
+
+  async importSnapshot(snapshot: JournalSnapshot) {
+    const payload: ImportLocalStorageSnapshotRequest = { snapshot };
+    const response = await apiClient.post<ImportLocalStorageSnapshotResponse>(journalApiPaths.importLocalStorage(), payload);
+    return response.data;
   },
 };
