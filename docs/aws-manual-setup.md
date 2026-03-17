@@ -623,6 +623,8 @@ npm run backend:build
 
 - `backend/dist/functions/api/handler.js`
 
+この出力は Lambda 向けに CommonJS 形式です。`Cannot use import statement outside a module` が出た場合は、古い zip を上げている可能性が高いので `npm run backend:build` からやり直してください。
+
 ### 6-2. zip を作る
 
 例:
@@ -663,11 +665,15 @@ functions/api/handler.handler
 
 Lambda の `Configuration -> Environment variables` で以下を追加します。
 
-- `AWS_REGION=ap-northeast-1`
 - `DATABASE_ARN=<Aurora cluster ARN>`
 - `DATABASE_SECRET_ARN=<Secrets Manager secret ARN>`
 - `DATABASE_NAME=<database name>`
 - `CORS_ALLOW_ORIGIN=<frontend domain>`
+
+注意:
+
+- `AWS_REGION` は Lambda の予約済み環境変数なので手動追加しません
+- Amplify 未作成の間は `CORS_ALLOW_ORIGIN=http://localhost:3000` で進めてよいです
 
 開発中は `CORS_ALLOW_ORIGIN=*` でも構いませんが、本番では Amplify の domain に絞るほうが安全です。
 
