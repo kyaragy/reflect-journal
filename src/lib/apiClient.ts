@@ -1,3 +1,4 @@
+import { redirectToLogin, refreshAuthSession } from '../auth/cognitoAuth';
 import { getAuthSession } from '../auth/authSession';
 
 type ApiClientConfig = {
@@ -30,17 +31,17 @@ export class ApiClient {
     this.defaultHeaders = config.defaultHeaders;
   }
 
-  async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const accessToken = getAuthSession().accessToken;
-    const response = await fetch(new URL(path, this.baseUrl).toString(), {
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        ...this.defaultHeaders,
-        ...init.headers,
-      },
-    });
+  async request<T>(path: string, init: RequestInit = {}, hasRetried = false): Promise<T> {
+    const response = await this.performRequest(path, init);
+
+    if (response.status === 401 && !hasRetried) {
+      const refreshedSession = await refreshAuthSession();
+      if (refreshedSession?.accessToken) {
+        return this.request<T>(path, init, true);
+      }
+
+      await redirectToLogin();
+    }
 
     if (!response.ok) {
       const payload = await this.parseResponse(response);
@@ -52,6 +53,19 @@ export class ApiClient {
     }
 
     return this.parseResponse(response) as Promise<T>;
+  }
+
+  private performRequest(path: string, init: RequestInit = {}) {
+    const accessToken = getAuthSession().accessToken;
+    return fetch(new URL(path, this.baseUrl).toString(), {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...this.defaultHeaders,
+        ...init.headers,
+      },
+    });
   }
 
   async requestSafe<T>(path: string, init: RequestInit = {}): Promise<ApiClientResult<T>> {
