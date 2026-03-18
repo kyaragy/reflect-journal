@@ -1,6 +1,6 @@
 # Reflect Journal
 
-ローカルで動作する振り返り用ジャーナルアプリです。
+振り返り用ジャーナルアプリです。ローカル開発に加えて、AWS 上の本番構成でも動作します。
 
 ## セットアップ
 
@@ -14,16 +14,11 @@
 ## スクリプト
 
 - `npm run dev`: 開発サーバー起動（`http://localhost:3000`）
-- `npm run backend:dev`: backend API 雛形を起動（`http://localhost:4000`）
+- `npm run backend:dev`: backend API をローカル起動（`http://localhost:4000`）
 - `npm run build`: 本番ビルド作成
+- `npm run backend:build`: Lambda 用 backend bundle を作成
 - `npm run preview`: ビルド結果をローカル確認
 - `npm run lint`: TypeScript 型チェック
-
-## GitHub Pages で公開
-
-1. リポジトリを GitHub に push
-2. GitHub の `Settings > Pages` で `Source: GitHub Actions` を選択
-3. `main` ブランチへ push すると `.github/workflows/deploy-pages.yml` が自動実行され、Pages にデプロイされます
 
 ## データ永続化の構成
 
@@ -44,18 +39,34 @@
 - 将来の backend API に向けた client contract は `src/contracts/journalApi.ts` に定義しています
 - 仕様メモは `docs/api-contract.md` を参照してください
 
-## Auth Context
+## Auth
 
-- `src/auth/AuthContext.tsx` に mock auth ベースの auth context を用意しています
-- `currentUser / login / logout` を扱え、将来 Cognito に差し替え可能です
-- `apiClient` は auth session に access token があれば `Authorization: Bearer ...` を自動で付与します
+- `VITE_REPOSITORY_DRIVER=api` のときは Cognito Hosted UI を使った認証を前提に動作します
+- frontend は authorization code flow + PKCE で token を取得し、API リクエストに `Authorization: Bearer ...` を付与します
+- `VITE_REPOSITORY_DRIVER=local-storage` のときはローカル保存モードとして動作します
 
-## Backend Skeleton
+## Backend
 
-- `backend/` に将来の AWS サーバーレス API 配備を見据えた backend 雛形を追加しています
-- ローカル起動は `npm run backend:dev`
-- エンドポイント一覧とヘルスチェックは `backend/README.md` を参照してください
+- `backend/` に API Gateway HTTP API + Lambda + Aurora PostgreSQL (RDS Data API) を前提にした backend 実装があります
+- backend のローカル起動は `npm run backend:dev`
+- 本番反映は `npm run backend:build` 後に Lambda へ zip を手動アップロードします
+- エンドポイント一覧と backend 側の詳細は `backend/README.md` を参照してください
 
-## AWS Migration Plan
+## 現在の AWS 構成
 
-- AWS 移行方針と RDB ベースのサーバーレス構成案は `docs/aws-migration-plan.md` に整理しています
+- frontend: Amplify Hosting
+- auth: Cognito User Pool
+- API: API Gateway HTTP API
+- compute: Lambda
+- DB: Aurora PostgreSQL Serverless v2
+- DB access: RDS Data API + Secrets Manager
+
+詳細な手順と運用メモ:
+
+- `docs/aws-manual-setup.md`
+- `docs/aws-migration-plan.md`
+
+## デプロイの反映単位
+
+- frontend は Amplify に接続済みブランチへの push で自動 build / deploy されます
+- backend / API Gateway / Cognito / Aurora の変更は自動反映されません

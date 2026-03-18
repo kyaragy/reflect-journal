@@ -1,6 +1,6 @@
 # AWS Manual Setup Guide
 
-このドキュメントは、`reflect-journal` を AWS 上で手動構築するための手順書です。
+このドキュメントは、`reflect-journal` を AWS 上で手動構築し、その後の追加改修でも現行構成を追えるようにするための手順書兼運用メモです。
 
 前提:
 
@@ -12,6 +12,66 @@
 - frontend は `Amplify Hosting`
 
 この手順は、AWS に不慣れな人でも再現しやすいように、できるだけ順番を崩さずに書いています。
+
+## 0-1. このドキュメントの使い方
+
+このドキュメントは次の 2 つを兼ねています。
+
+- 初回の AWS 手動構築手順
+- 新しいチャットでも現 AWS 構成を説明できるようにするための引き継ぎ資料
+
+方針:
+
+- 実際のクレデンシャル、ARN、App Client ID、API URL、独自ドメイン、アカウント ID は書かない
+- 代わりに `<DATABASE_ARN>` や `https://<AMPLIFY_APP_URL>` のようなプレースホルダで表す
+- 値そのものは個人メモやパスワードマネージャで管理する
+
+## 0-2. 現在の本番構成サマリー
+
+現時点の本番構成は次のとおりです。
+
+- frontend: Amplify Hosting
+- auth: Cognito User Pool + Hosted UI
+- frontend auth flow: Authorization Code Flow + PKCE
+- API: API Gateway HTTP API
+- backend: Lambda (TypeScript を bundle した zip を手動アップロード)
+- DB: Aurora PostgreSQL Serverless v2
+- DB access: RDS Data API + Secrets Manager
+
+アプリの動作方針:
+
+- `VITE_REPOSITORY_DRIVER=api` のときは frontend で Cognito 認証を必須にする
+- 未認証ならカレンダー描画前に Hosted UI にリダイレクトする
+- API Gateway は `GET /health` だけ認証なし、それ以外は JWT authorizer 付き
+- Lambda は `requestContext.authorizer.jwt.claims.sub` を `user_id` として扱う
+
+## 0-3. 何が自動反映され、何が手動反映か
+
+この構成では、変更内容によって反映方法が異なります。
+
+自動反映されるもの:
+
+- `main` へ push した frontend の変更
+- Amplify に接続済みブランチの build / deploy
+
+手動反映が必要なもの:
+
+- Lambda のコード差し替え
+- Lambda 環境変数の変更
+- API Gateway の route / authorizer / CORS 設定
+- Cognito の App Client 設定
+- Aurora / schema の変更
+- IAM 権限の変更
+
+backend を反映するときの基本コマンド:
+
+```bash
+npm run backend:build
+cd backend/dist
+zip -r function.zip .
+```
+
+その後、生成した `backend/dist/function.zip` を Lambda に再アップロードします。
 
 ## 0. 全体像
 
@@ -105,6 +165,22 @@ AWS コンソール右上のリージョン選択で、`Asia Pacific (Tokyo) ap-
 - `docs/aws-secrets-private.md` のような未コミット個人メモ
 
 機密情報そのものは Git に commit しません。
+
+## 2-1. Git や公開ドキュメントに書かないもの
+
+次の値は README や docs 配下にそのまま書かないでください。
+
+- 実際の Cognito domain
+- 実際の App Client ID
+- 実際の User Pool ID
+- 実際の API Gateway invoke URL
+- 実際の Aurora cluster ARN
+- 実際の Secrets Manager ARN
+- 実際の account ID
+- DB パスワード
+- access token / refresh token / authorization code
+
+将来のチャットで相談するときも、必要なら一部を伏せるか、プレースホルダに置き換えて共有する運用にします。
 
 ## 3. Cognito User Pool を作る
 
@@ -693,6 +769,8 @@ Lambda の `設定 -> 環境変数` で以下を追加します。
 
 - `AWS_REGION` は Lambda の予約済み環境変数なので手動追加しません
 - Amplify 未作成の間は `CORS_ALLOW_ORIGIN=http://localhost:3000` で進めてよいです
+- Amplify の URL が決まったら `CORS_ALLOW_ORIGIN` は本番 origin に更新します
+- Lambda の zip 再アップロードでは環境変数は消えませんが、変更後は値が意図どおり残っているか再確認すると安全です
 
 開発中は `CORS_ALLOW_ORIGIN=*` でも構いませんが、本番では Amplify の domain に絞るほうが安全です。
 
@@ -987,6 +1065,21 @@ curl \
 5. Aurora ARN / Secret ARN
 6. Data API が有効か
 
+### 8-5. 認証と CORS の切り分け方
+
+frontend から API を叩いたときは、次の順番で見ます。
+
+- `OPTIONS /bootstrap = 404`
+  - 認証以前に API Gateway の CORS 設定が足りていません
+- `OPTIONS /bootstrap = 204`
+  - CORS は通っています
+- その後の `GET /bootstrap = 401`
+  - 未認証としては期待どおりです
+- その後の `GET /bootstrap = 200`
+  - token 付き認証が通っています
+
+`Failed to fetch` とだけ出る場合でも、実際には `Network` タブで `OPTIONS` と `GET` を分けて見ると原因を切り分けやすくなります。
+
 ## 9. Amplify Hosting を作る
 
 ### 9-1. GitHub 連携
@@ -1193,6 +1286,16 @@ Amplify 上で未認証のまま開いた場合、最終的には次のように
 6. カレンダーが表示され、`Failed to fetch` が出ない
 7. `ログアウト` で Cognito logout が動く
 
+### 10-8. 現在の UI / 認証の期待動作
+
+`api` モードでは、未認証時に次の挙動を期待します。
+
+- ヘッダーにユーザー ID の生値は表示しない
+- 未認証ならカレンダー本体を描画せず、認証確認またはリダイレクト待ち表示を出す
+- 認証確立後に `/bootstrap` を呼び、その後でカレンダーを表示する
+
+`guest mode` のままカレンダーが見えている場合は、古い frontend build が配信されているか、Cognito 環境変数が Amplify に入っていない可能性があります。
+
 ## 11. 作成後チェックリスト
 
 全部終わったら、次を確認します。
@@ -1264,6 +1367,54 @@ Amplify 上で未認証のまま開いた場合、最終的には次のように
 - 適用先 cluster
 - 適用した schema が本当に `backend/schema.sql` か
 
+### 12-5. Amplify では guest mode のままで、認証ガードが効かない
+
+見る場所:
+
+- Amplify の最新デプロイが期待した commit を拾っているか
+- Amplify の環境変数
+  - `VITE_REPOSITORY_DRIVER=api`
+  - `VITE_COGNITO_APP_CLIENT_ID`
+  - `VITE_COGNITO_DOMAIN`
+- ブラウザの hard reload
+
+典型例:
+
+- docs だけ push して frontend 本体を push していない
+- `main` には push したが、Amplify がまだ古い build を配信している
+
+### 12-6. カード作成や更新で 500 が出る
+
+Data API では、SQL の型が曖昧だと PostgreSQL 側でエラーになりやすいです。
+
+典型例:
+
+- `UUID` 列に文字列をそのまま入れている
+- `DATE` 列と text を比較している
+- `TIMESTAMPTZ` 列に text をそのまま入れている
+
+対処例:
+
+- `CAST(:cardId AS UUID)`
+- `CAST(:date AS DATE)`
+- `CAST(:createdAt AS TIMESTAMPTZ)`
+- `CAST(:updatedAt AS TIMESTAMPTZ)`
+
+カード作成時に `500` が出たら、まず CloudWatch Logs またはブラウザの `Response` で PostgreSQL エラー本文を確認します。
+
+### 12-7. 登録済みカードの時刻表示が JST にならない
+
+DB 側は `TIMESTAMPTZ` で保持します。表示がずれるときは、保存時刻そのものよりも API の返し方と frontend 側の整形を確認します。
+
+見る場所:
+
+- backend が `createdAt` / `updatedAt` を ISO 8601 UTC (`...Z`) で返しているか
+- frontend が `Asia/Tokyo` で表示整形しているか
+
+### 12-8. favicon の 404
+
+`/favicon.ico` の `404` は、今回の AWS 移行の主要機能とは無関係です。認証や API 動作の調査対象とは切り分けて構いません。
+
 ## 13. この順番で進める
 
 迷ったら、次の順で進めてください。
@@ -1281,6 +1432,55 @@ Amplify 上で未認証のまま開いた場合、最終的には次のように
 11. Cognito callback / sign-out URL に Amplify URL を追加
 12. Lambda / API Gateway の CORS を Amplify URL に合わせる
 13. frontend の Cognito 対応
+
+## 14. 追加改修時の運用メモ
+
+このリポジトリは、現時点では本番寄り 1 環境で運用しています。
+
+意味:
+
+- `main` へ入れた frontend 変更は Amplify で本番反映される
+- backend / API Gateway / Cognito / Aurora は手動反映なので、変更の影響は自分で管理する
+
+追加改修の考え方:
+
+- 本番に入れてよい変更
+  - そのまま `main` に反映
+- UI の試作や見た目の検証だけ
+  - 別ブランチで作業し、必要なら Amplify に検証用ブランチを接続
+- backend / DB に影響する変更
+  - いまの運用では本番と混ざりやすいので、変更内容を小さく切る
+
+個人開発ではこの運用でも十分ですが、将来 staging を本格的に分けたくなったら、少なくとも次の単位で分離を検討します。
+
+- Amplify
+- API Gateway
+- Lambda
+- Aurora
+- Cognito
+
+## 15. 新しいチャットに渡すときの要約テンプレート
+
+新しいチャットで追加改修を依頼するときは、次のような要約を貼ると会話が早くなります。
+
+```text
+reflect-journal は AWS 上で次の構成です。
+- frontend: Amplify Hosting
+- auth: Cognito User Pool + Hosted UI
+- API: API Gateway HTTP API + JWT authorizer
+- backend: Lambda (zip を手動アップロード)
+- DB: Aurora PostgreSQL Serverless v2
+- DB access: RDS Data API + Secrets Manager
+
+frontend は main push で Amplify 自動デプロイです。
+backend / API Gateway / Cognito / Aurora は手動反映です。
+
+api モードでは Cognito 認証必須で、未認証なら Hosted UI に飛ばします。
+GET /health だけ認証なし、他の API は JWT authorizer 付きです。
+
+クレデンシャルや実際の ARN / URL / ID は共有しません。
+必要な値はプレースホルダで扱ってください。
+```
 
 ## 参考リンク
 

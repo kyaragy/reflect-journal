@@ -2,7 +2,7 @@
 
 Reflect Journal を AWS に移行する際の、低コスト寄りなサーバーレス RDB 構成メモです。
 
-実際の AWS コンソール操作手順は [docs/aws-manual-setup.md](/home/kiaragi/projects/reflect-journal/docs/aws-manual-setup.md) を参照してください。
+実際の AWS コンソール操作手順は `docs/aws-manual-setup.md` を参照してください。
 
 2026-03-12 時点では、次の前提で考えるのが妥当です。
 
@@ -149,10 +149,15 @@ Browser
 
 ### 4. 認証の変更
 
+注意:
+
+- この章は移行設計の経緯を残したものです
+- 実際の現在構成と運用手順は `docs/aws-manual-setup.md` を正とします
+
 現状:
 
-- frontend は mock auth
-- backend は `Authorization` ヘッダを受けるだけで、実際の検証はしていない
+- frontend は Cognito Hosted UI ベースの認証導線へ移行済み
+- backend は API Gateway HTTP API の JWT authorizer を前提とし、Lambda では JWT claim の `sub` を利用する
 
 変更方針:
 
