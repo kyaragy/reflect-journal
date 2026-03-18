@@ -10,7 +10,15 @@ interface JournalCardProps {
 }
 
 const JournalCard: React.FC<JournalCardProps> = ({ entry, onEdit }) => {
-  const time = format(new Date(entry.createdAt), 'HH:mm');
+  const createdAt = new Date(entry.createdAt);
+  const time = Number.isNaN(createdAt.getTime())
+    ? format(new Date(), 'HH:mm')
+    : new Intl.DateTimeFormat('ja-JP', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Asia/Tokyo',
+      }).format(createdAt);
 
   return (
     <motion.div
